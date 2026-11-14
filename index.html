@@ -362,6 +362,12 @@ async function fetchSparkChunk(symbols, t) {
     const prev = r.previousClose != null ? r.previousClose : hist[hist.length - 2].p;
     const dp = r.fulldayChangePercent != null ? r.fulldayChangePercent : (price - prev) / prev * 100;
     const d = r.fulldayChange != null ? r.fulldayChange : price - prev;
+    // anchor the 1D line at yesterday's close: a gap-up would otherwise
+    // be invisible (day's bars only), making the chart contradict the
+    // day change \u2014 e.g. +27% card next to a falling intraday line
+    if (t === "1D" && r.previousClose != null) {
+      hist.unshift({ t: hist[0].t - 60, p: r.previousClose });
+    }
     out[s] = {
       c: price, prev: prev,
       dp: dp, d: d,
@@ -393,6 +399,9 @@ async function fetchOne(sym, t) {
   const prev = m.previousClose != null ? m.previousClose
     : (t === "1M" && hist.length >= 2) ? hist[hist.length - 2].p
     : (m.chartPreviousClose || hist[0].p);
+  if (t === "1D" && prev != null && hist.length) {
+    hist.unshift({ t: hist[0].t - 60, p: prev });
+  }
   return {
     c: price, prev: prev,
     dp: (price - prev) / prev * 100, d: price - prev,
