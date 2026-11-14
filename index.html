@@ -19,17 +19,12 @@
   .actions { display: flex; gap: 8px; align-items: center; }
   .badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid; letter-spacing: 0.05em; }
   .badge.live { color: var(--up); background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.3); }
-  .badge.nokey { color: var(--dim); background: rgba(100,116,139,.12); border-color: rgba(100,116,139,.3); }
+  .badge.wait { color: var(--dim); background: rgba(100,116,139,.12); border-color: rgba(100,116,139,.3); }
   button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); padding: 6px 12px; font-size: 13px; }
   button:hover { color: #fff; border-color: #475569; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
   button:disabled { opacity: .5; cursor: default; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
-  .keybox { padding: 16px; margin-top: 16px; }
-  .keybox p.help { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
-  .keyrow { display: flex; gap: 8px; flex-wrap: wrap; }
-  input[type=password] { flex: 1; min-width: 220px; font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; outline: none; }
-  input[type=password]:focus { border-color: var(--accent); }
   .autobox { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
   .err { margin-top: 16px; padding: 12px 16px; background: rgba(88,28,28,.35); border: 1px solid rgba(153,27,27,.5); border-radius: 12px; color: #fda4af; font-size: 14px; display: none; }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
@@ -74,23 +69,11 @@
   <div class="flex">
     <div>
       <h1>AI Capex Boom Tracker</h1>
-      <p class="sub" id="subtitle">Add your free Finnhub API key to load live quotes</p>
+      <p class="sub" id="subtitle">Live AI-capex quotes &amp; 1-month trends via Yahoo Finance &mdash; no API key needed</p>
     </div>
     <div class="actions">
-      <span class="badge nokey" id="badge">NO KEY</span>
-      <button id="btnKey">Add API key</button>
+      <span class="badge wait" id="badge">WAIT</span>
       <button id="btnRefresh">Refresh now</button>
-    </div>
-  </div>
-
-  <div class="card keybox" id="keybox" style="display:none">
-    <p class="help">Get a free key at <b>finnhub.io</b> (dashboard front page — not the webhook secret).
-      Free tier includes US quotes at ~60 calls/min; the app batches its calls to stay inside that.
-      The key is stored only in your browser.</p>
-    <div class="keyrow">
-      <input type="password" id="keyInput" placeholder="Paste your Finnhub API key…">
-      <button class="primary" id="btnSave">Save &amp; connect</button>
-      <button id="btnRemove" style="display:none">Remove</button>
     </div>
   </div>
 
@@ -115,7 +98,7 @@
 
   <div class="tabs" id="tabs"></div>
   <div class="grid" id="grid"></div>
-  <p class="footer" id="footer">Waiting for API key…</p>
+  <p class="footer" id="footer">Loading&hellip;</p>
 </div>
 
 <script>
@@ -151,7 +134,7 @@ const WATCHLIST = [
     { symbol: "WDC", name: "Western Digital" },
     { symbol: "STX", name: "Seagate" },
     { symbol: "SNDK", name: "SanDisk" },
-    { symbol: "PSTG", name: "Pure Storage" },
+    { symbol: "NTAP", name: "NetApp" },
   ]},
   { group: "Foundry & Fab Equipment", stocks: [
     { symbol: "TSM", name: "TSMC" },
@@ -166,7 +149,6 @@ const WATCHLIST = [
     { symbol: "CRDO", name: "Credo" },
     { symbol: "ALAB", name: "Astera Labs" },
     { symbol: "CSCO", name: "Cisco" },
-    { symbol: "JNPR", name: "Juniper" },
   ]},
   { group: "Servers & Hardware", stocks: [
     { symbol: "SMCI", name: "Super Micro" },
@@ -201,126 +183,238 @@ const WATCHLIST = [
     { symbol: "CDNS", name: "Cadence" },
   ]},
   { group: "Robotics & Industrial", stocks: [
-    { symbol: "IRBT", name: "iRobot" },
+    { symbol: "SERV", name: "Serve Robotics" },
     { symbol: "ROK", name: "Rockwell Automation" },
     { symbol: "SYM", name: "Symbotic" },
   ]},
 ];
 const ALL = WATCHLIST.flatMap(g => g.stocks.map(s => s.symbol));
-const HIST_KEY = "capex_hist_v1";
-const MCAP_KEY = "capex_mcaps_v2";  // { ts, caps: { sym: marketCap (millions) } }
-const BASE_KEY = "capex_bases_v2";  // { sym: first price ever seen }
-const IDX_KEY  = "capex_index_v2"; // { cap: [{t,v}], eq: [{t,v}] }
+// Market caps in millions USD, as of 2026-11-14 (Yahoo Finance)
+const MCAPS = {
+  "NVDA": 3932339,
+  "AMD": 875905,
+  "AVGO": 1656497,
+  "MRVL": 141047,
+  "ARM": 203867,
+  "QCOM": 184543,
+  "INTC": 317093,
+  "AMBA": 2654,
+  "MSFT": 3890435,
+  "GOOGL": 3636196,
+  "AMZN": 2883431,
+  "META": 1640694,
+  "ORCL": 390805,
+  "CRWV": 29547,
+  "NBIS": 29422,
+  "IREN": 7711,
+  "APLD": 4829,
+  "CORZ": 4679,
+  "MU": 880598,
+  "WDC": 110669,
+  "STX": 121275,
+  "SNDK": 125928,
+  "TSM": 2068002,
+  "ASML": 576261,
+  "AMAT": 294028,
+  "LRCX": 282213,
+  "KLAC": 198467,
+  "TER": 38961,
+  "ANET": 249257,
+  "CRDO": 24718,
+  "ALAB": 38772,
+  "CSCO": 377069,
+  "SMCI": 17710,
+  "DELL": 219057,
+  "HPE": 64103,
+  "HPQ": 26477,
+  "CLS": 30310,
+  "EQIX": 104313,
+  "DLR": 69295,
+  "IRM": 33879,
+  "MOD": 7217,
+  "JCI": 84398,
+  "TT": 91496,
+  "CARR": 44344,
+  "COHR": 42967,
+  "GLW": 98269,
+  "LITE": 54104,
+  "CIEN": 39783,
+  "PLTR": 404772,
+  "SNOW": 102665,
+  "DDOG": 66490,
+  "NET": 109600,
+  "SNPS": 87233,
+  "CDNS": 88627,
+  "ROK": 44693,
+  "SYM": 21085,
+  "NTAP": 35625,
+  "SERV": 229,
+};
+const CACHE_KEY = "capex_cache_v1";
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-let apiKey = localStorage.getItem("finnhub_key") || "";
-let quotes = {};
-let histories = loadHist();
+// ---------------------------------------------------------------
+// State
+// ---------------------------------------------------------------
+let quotes = {};       // sym -> { c, prev, dp, d, hist: [{t,p}] }
+let indexData = null;   // { cap: [...], eq: [...] } over the 1-month window
 let activeTab = "Hyperscalers";
 let autoRefresh = localStorage.getItem("capex_auto") !== "0";
 let lastUpdated = null;
 let loading = false;
 let timer = null;
-let indexData = loadIndex();
-let equalFallback = false;
 let failedSymbols = [];
 
-// fetch quotes in small, paced batches and report which failed
-async function fetchBatched(symbols, got) {
-  const reasons = {};
-  const failed = [];
-  const CHUNK = 12;
+// ---------------------------------------------------------------
+// Yahoo Finance (unofficial) via public CORS proxies, no API key.
+// Multi-symbol spark requests: 15 tickers per call, so a full
+// 58-name refresh is 4 requests. If a proxy is down or hangs, the
+// chain falls through to the next one and benches the dead proxy
+// for 10 minutes (allorigins had a full outage on 13 Nov 2026).
+// ---------------------------------------------------------------
+const QUOTE_PROXIES = [
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+  // r.jina.ai wraps payloads in a small markdown header \u2014 parseJsonLoose
+  // strips it. Only viable because we batch 15 symbols per request.
+  u => "https://r.jina.ai/" + u,
+];
+let proxyIdx = 0;
+const proxyDeadUntil = [];
+const PROXY_COOLDOWN = 10 * 60 * 1000;
+
+async function proxyFetch(url) {
+  let order = [];
+  for (let k = 0; k < QUOTE_PROXIES.length; k++) {
+    const i = (proxyIdx + k) % QUOTE_PROXIES.length;
+    if (proxyDeadUntil[i] && Date.now() < proxyDeadUntil[i]) continue;
+    order.push(i);
+  }
+  if (!order.length) {
+    // everything in cooldown \u2014 try once anyway, it may have recovered
+    for (let k = 0; k < QUOTE_PROXIES.length; k++) order.push((proxyIdx + k) % QUOTE_PROXIES.length);
+  }
+  let lastErr = null;
+  for (const i of order) {
+    try {
+      const opts = typeof AbortSignal !== "undefined" && AbortSignal.timeout
+        ? { signal: AbortSignal.timeout(15000) } : {};
+      const r = await fetch(QUOTE_PROXIES[i](url), opts);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const t = await r.text();
+      const trimmed = (t || "").trim();
+      if (trimmed.length < 25 || /^(error code|oops|rate limit|too many)/i.test(trimmed)) {
+        throw new Error("proxy refused");
+      }
+      proxyIdx = i;
+      proxyDeadUntil[i] = 0;
+      return t;
+    } catch (e) { lastErr = e; proxyDeadUntil[i] = Date.now() + PROXY_COOLDOWN; }
+  }
+  throw lastErr || new Error("all proxies failed");
+}
+
+// Tolerant JSON extraction: r.jina.ai prepends a small markdown
+// header, so slice from the first "{" to the last "}".
+function parseJsonLoose(text) {
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a < 0 || b <= a) throw new Error("not JSON");
+  return JSON.parse(text.slice(a, b + 1));
+}
+
+const SPARK_CHUNK = 15;
+async function fetchSparkChunk(symbols) {
+  const target = "https://query1.finance.yahoo.com/v8/finance/spark?symbols=" +
+    symbols.map(encodeURIComponent).join(",") + "&range=1mo&interval=1d";
+  const text = await proxyFetch(target);
+  const j = parseJsonLoose(text);
+  const out = {};
+  symbols.forEach(s => {
+    const r = j[s];
+    if (!r || !r.close || r.close.length < 2) return;
+    const hist = [];
+    (r.timestamp || []).forEach((t, i) => { if (r.close[i] != null) hist.push({ t, p: r.close[i] }); });
+    if (hist.length < 2) return;
+    const price = r.fulldayPrice != null ? r.fulldayPrice : hist[hist.length - 1].p;
+    const prev = hist[hist.length - 2].p;
+    out[s] = {
+      c: price, prev: prev,
+      dp: (price - prev) / prev * 100, d: price - prev,
+      hist: hist,
+    };
+  });
+  return out;
+}
+
+// fallback for stragglers: single-symbol chart endpoint
+async function fetchOne(sym) {
+  const target = "https://query1.finance.yahoo.com/v8/finance/chart/" +
+    encodeURIComponent(sym) + "?range=1mo&interval=1d";
+  const text = await proxyFetch(target);
+  const j = parseJsonLoose(text);
+  const res = j && j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error("no data");
+  const m = res.meta || {};
+  const ts = res.timestamp || [];
+  const closes = (res.indicators && res.indicators.quote && res.indicators.quote[0] &&
+    res.indicators.quote[0].close) || [];
+  const hist = [];
+  ts.forEach((t, i) => { if (closes[i] != null) hist.push({ t, p: closes[i] }); });
+  const price = m.regularMarketPrice;
+  if (!price || !hist.length) throw new Error("empty");
+  const prev = hist.length >= 2 ? hist[hist.length - 2].p : (m.chartPreviousClose || hist[0].p);
+  return {
+    c: price, prev: prev,
+    dp: (price - prev) / prev * 100, d: price - prev,
+    hist: hist,
+  };
+}
+
+async function fetchStragglers(symbols, into, failed) {
+  const CHUNK = 6;
   for (let i = 0; i < symbols.length; i += CHUNK) {
     const batch = symbols.slice(i, i + CHUNK);
-    const results = await Promise.allSettled(batch.map(s =>
-      fetch("https://finnhub.io/api/v1/quote?symbol=" + s + "&token=" + apiKey)
-        .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    ));
+    const results = await Promise.allSettled(batch.map(s => fetchOne(s)));
     results.forEach((res, j) => {
-      if (res.status === "fulfilled" && res.value && res.value.c) got[batch[j]] = res.value;
-      else {
-        failed.push(batch[j]);
-        const msg = res.status === "rejected" ? String((res.reason && res.reason.message) || "failed") : "no data returned";
-        reasons[msg] = (reasons[msg] || 0) + 1;
-      }
+      if (res.status === "fulfilled") into[batch[j]] = res.value;
+      else failed.push(batch[j]);
     });
-    // paint cards progressively as batches arrive
-    quotes = got;
+    quotes = into;
     render();
-    if (i + CHUNK < symbols.length) await sleep(21000);
+    if (i + CHUNK < symbols.length) await sleep(1300);
   }
-  return { reasons, failed };
 }
 
-function loadIndex() {
-  try {
-    const v = JSON.parse(localStorage.getItem(IDX_KEY));
-    if (v && v.cap && v.eq) return v;
-  } catch (e) {}
-  return { cap: [], eq: [] };
-}
-
-// fetch market caps (cached a week) to use as index weights
-async function ensureMcaps() {
-  let m = null;
-  try { m = JSON.parse(localStorage.getItem(MCAP_KEY)); } catch (e) {}
-  if (m && m.ts && Date.now() / 1000 - m.ts < 7 * 86400 && m.caps) return m.caps;
-  // same rate-limit pacing as quotes
-  const caps = {};
-  const CHUNK = 12;
-  for (let i = 0; i < ALL.length; i += CHUNK) {
-    const batch = ALL.slice(i, i + CHUNK);
-    const results = await Promise.allSettled(batch.map(s =>
-      fetch("https://finnhub.io/api/v1/stock/profile2?symbol=" + s + "&token=" + apiKey)
-        .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    ));
-    results.forEach((res, j) => {
-      const v = res.status === "fulfilled" ? res.value : null;
-      if (v && v.marketCapitalization) caps[batch[j]] = v.marketCapitalization; // millions USD
-    });
-    if (i + CHUNK < ALL.length) await sleep(21000);
-  }
-  if (Object.keys(caps).length) {
-    try { localStorage.setItem(MCAP_KEY, JSON.stringify({ ts: Math.floor(Date.now() / 1000), caps })); } catch (e) {}
-  }
-  return caps;
-}
-
-// market-cap weighted index: level = sum over i of w_i * (price_i / base_i),
-// base_i = first price seen for symbol i, so the index starts at 1.0
-async function updateIndex(qs) {
-  const mcaps = await ensureMcaps();
-  let bases = {};
-  try { bases = JSON.parse(localStorage.getItem(BASE_KEY)) || {}; } catch (e) {}
-  const now = Math.floor(Date.now() / 1000);
-  let basesChanged = false;
-  for (const s of Object.keys(qs)) {
-    if (!bases[s]) { bases[s] = qs[s].c; basesChanged = true; }
-  }
-  const syms = Object.keys(qs).filter(s => bases[s]);
-  if (syms.length) {
-    const capped = syms.filter(s => mcaps[s]);
-    const capSum = capped.reduce((a, s) => a + mcaps[s], 0);
-    equalFallback = capped.length === 0;
-    const weight = s =>
-      equalFallback ? 1 / syms.length : (mcaps[s] || 0) / capSum;
+// ---------------------------------------------------------------
+// Index: cap-weighted vs equal-weighted over the real 1-month
+// daily history from Yahoo (no more accumulating points per
+// refresh \u2014 we get actual daily closes now). Each stock
+// normalized to its first close in the window, forward-filled to
+// the union of trading days. Weights: baked-in market caps (USD).
+// ---------------------------------------------------------------
+function computeIndex(q) {
+  const syms = ALL.filter(s => q[s] && q[s].hist.length > 2 && MCAPS[s]);
+  if (!syms.length) return null;
+  const capSum = syms.reduce((a, s) => a + MCAPS[s], 0);
+  const datesSet = new Set();
+  syms.forEach(s => q[s].hist.forEach(h => datesSet.add(h.t)));
+  const dates = [...datesSet].sort((a, b) => a - b);
+  const cap = [], eq = [];
+  const lastSeen = {};
+  for (const t of dates) {
     let capV = 0, eqV = 0;
     for (const s of syms) {
-      const r = qs[s].c / bases[s];
-      capV += weight(s) * r;
+      const h = q[s].hist.find(x => x.t === t);
+      if (h) lastSeen[s] = h.p;
+      if (lastSeen[s] == null) continue;
+      const r = lastSeen[s] / q[s].hist[0].p;
+      capV += (MCAPS[s] / capSum) * r;
       eqV += r / syms.length;
     }
-    // a point on every refresh, so the index line progresses too
-    indexData.cap.push({ t: now, v: capV });
-    indexData.eq.push({ t: now, v: eqV });
-    indexData.cap = indexData.cap.slice(-240);
-    indexData.eq = indexData.eq.slice(-240);
-    try { localStorage.setItem(IDX_KEY, JSON.stringify(indexData)); } catch (e) {}
+    cap.push({ t, v: capV });
+    eq.push({ t, v: eqV });
   }
-  if (basesChanged) {
-    try { localStorage.setItem(BASE_KEY, JSON.stringify(bases)); } catch (e) {}
-  }
-  return indexData;
+  return { cap: cap, eq: eq, n: syms.length };
 }
 
 function drawMulti(cv, series) {
@@ -353,63 +447,43 @@ function drawMulti(cv, series) {
   });
 }
 
-function loadHist() {
-  try { return JSON.parse(localStorage.getItem(HIST_KEY)) || {}; }
-  catch (e) { return {}; }
-}
-function saveHist(h) {
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch (e) {}
-}
-
 async function fetchQuotes() {
-  if (!apiKey) { quotes = {}; render(); return; }
   if (loading) return; // never overlap refreshes
   setLoading(true);
   showError(null);
   failedSymbols = [];
-  // Finnhub free tier: 60 calls/min. A 60-symbol watchlist can't fire
-  // all at once: fetch in paced batches, then retry whatever failed
-  // once (after a pause) before giving up on it.
   const next = {};
-  let { reasons, failed } = await fetchBatched(ALL, next);
+  const failed = [];
+  // fast path: multi-symbol spark API \u2014 4 requests for all 58 names
+  // instead of 58 single-symbol requests (gentle on the free proxies)
+  for (let i = 0; i < ALL.length; i += SPARK_CHUNK) {
+    const chunk = ALL.slice(i, i + SPARK_CHUNK);
+    try {
+      Object.assign(next, await fetchSparkChunk(chunk));
+    } catch (e) { /* whole chunk failed \u2014 retried below */ }
+    chunk.forEach(s => { if (!next[s]) failed.push(s); });
+    quotes = next;
+    render();
+    if (i + SPARK_CHUNK < ALL.length) await sleep(700);
+  }
+  // stragglers: single-symbol chart requests (better per-symbol errors)
   if (failed.length) {
-    await sleep(21000); // let the per-minute call window clear
-    const retry = await fetchBatched(failed, next);
-    reasons = Object.assign({}, reasons, retry.reasons);
+    await sleep(2500);
+    failedSymbols = [];
+    await fetchStragglers(failed, next, failedSymbols);
   }
   if (Object.keys(next).length === 0) {
-    const detail = Object.entries(reasons).map(([k, n]) => k + " \u00d7" + n).join(", ");
-    const hint = /HTTP 429/.test(detail)
-      ? "Finnhub's free-tier rate limit (60 calls/min) was hit \u2014 wait a minute, then hit Refresh now."
-      : /HTTP 40[13]/.test(detail)
-        ? "The API key looks invalid or lacks access \u2014 copy it again from your finnhub.io dashboard."
-        : "The app can't reach finnhub.io \u2014 check your internet connection.";
-    showError("Couldn't fetch quotes (" + detail + "). " + hint);
+    showError("Couldn't reach Yahoo Finance \u2014 the CORS proxy chain (allorigins / codetabs / jina) is down or rate-limiting. " +
+      "Wait a minute and hit Refresh now; cached data is still shown.");
   } else {
     quotes = next;
     failedSymbols = ALL.filter(s => !next[s]);
-    histories = await updateHistories(next);
-    indexData = await updateIndex(next);
+    indexData = computeIndex(next);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), quotes: next })); } catch (e) {}
+    lastUpdated = new Date();
   }
-  lastUpdated = new Date();
   setLoading(false);
   render();
-}
-
-async function updateHistories(qs) {
-  const hist = loadHist();
-  const now = Math.floor(Date.now() / 1000);
-  // (no daily-candle bootstrap: candles are premium on Finnhub free,
-  // and dropping those calls keeps the 60/min budget for the quotes)
-  for (const [s, q] of Object.entries(qs)) {
-    // record a point on EVERY refresh — flat while the US market is
-    // closed, but the line always progresses with incoming data
-    const arr = hist[s] || [];
-    arr.push({ t: now, p: q.c });
-    hist[s] = arr.slice(-240);
-  }
-  saveHist(hist);
-  return hist;
 }
 
 function drawSpark(cv, data, up) {
@@ -447,14 +521,11 @@ function activeStocks() {
 }
 
 function render() {
-  document.getElementById("subtitle").textContent = apiKey
-    ? "Live quotes via Finnhub \u00b7 " + ALL.length + " stocks \u00b7 refreshes every 3 min (rate-limit friendly)"
-    : "Add your free Finnhub API key to load live quotes";
+  document.getElementById("subtitle").textContent =
+    "Live quotes via Yahoo Finance \u00b7 " + ALL.length + " stocks \u00b7 refreshes every 3 min";
   const badge = document.getElementById("badge");
-  badge.textContent = apiKey ? "LIVE" : "NO KEY";
-  badge.className = "badge " + (apiKey ? "live" : "nokey");
-  document.getElementById("btnKey").textContent = apiKey ? "API key" : "Add API key";
-  document.getElementById("btnRemove").style.display = apiKey ? "" : "none";
+  badge.textContent = lastUpdated ? "LIVE" : quotes && Object.keys(quotes).length ? "CACHED" : "WAIT";
+  badge.className = "badge " + (lastUpdated ? "live" : "wait");
 
   // stats
   const qs = Object.values(quotes);
@@ -484,7 +555,7 @@ function render() {
   grid.innerHTML = activeStocks().map(s => {
     const q = quotes[s.symbol];
     const up = q ? q.dp >= 0 : true;
-    const hist = histories[s.symbol];
+    const hist = q ? q.hist : null;
     return '<div class="card stock">' +
       '<div class="top"><div><div class="sym">' + s.symbol + '</div><div class="name">' + s.name + '</div></div>' +
       '<span class="arrow ' + (up ? "up" : "down") + '">' + (q ? (up ? "\u25b2" : "\u25bc") : "") + "</span></div>" +
@@ -493,50 +564,43 @@ function render() {
       '<div class="abs">' + (q ? fmt(q.d, 2) + " today" : "") + "</div></div></div>" +
       (hist && hist.length > 1
         ? '<canvas data-sym="' + s.symbol + '"></canvas>' +
-          '<div class="trendcap">trend \u00b7 ' + hist.length + " pts \u00b7 grows each refresh</div>"
+          '<div class="trendcap">1-month trend \u00b7 daily closes</div>'
         : "") +
       "</div>";
   }).join("");
 
   document.querySelectorAll("#grid canvas").forEach(cv => {
-    const hist = histories[cv.dataset.sym];
-    if (hist && hist.length > 1) {
-      const q = quotes[cv.dataset.sym];
-      drawSpark(cv, hist, q ? q.dp >= 0 : true);
-    }
+    const q = quotes[cv.dataset.sym];
+    const hist = q ? q.hist : null;
+    if (hist && hist.length > 1) drawSpark(cv, hist, q.dp >= 0);
   });
 
   // index panel
   const panel = document.getElementById("indexPanel");
-  if (apiKey) {
+  if (indexData && indexData.cap && indexData.cap.length > 1) {
     panel.style.display = "block";
     const cap = indexData.cap, eq = indexData.eq;
-    if (cap.length > 1 && eq.length > 1) {
-      const lastV = cap[cap.length - 1].v;
-      const chg = (lastV / cap[0].v - 1) * 100;
-      const eqChg = (eq[eq.length - 1].v / eq[0].v - 1) * 100;
-      document.getElementById("idxValue").textContent = lastV.toFixed(4);
-      document.getElementById("idxSub").textContent =
-        fmt(chg, 2) + "% since first data point \u00b7 equal-weight " + fmt(eqChg, 2) + "%" +
-        (equalFallback ? " \u00b7 equal weights only (market caps unavailable)" : "");
-      drawMulti(document.getElementById("idxChart"), [
-        { data: cap, color: "#38bdf8" },
-        { data: eq, color: "#f59e0b" },
-      ]);
-    } else {
-      document.getElementById("idxValue").innerHTML = "&mdash;";
-      document.getElementById("idxSub").textContent =
-        "Building \u2014 the index starts at 1.0 and adds a point on every refresh.";
-    }
+    const lastV = cap[cap.length - 1].v;
+    const chg = (lastV / cap[0].v - 1) * 100;
+    const eqChg = (eq[eq.length - 1].v / eq[0].v - 1) * 100;
+    document.getElementById("idxValue").textContent = lastV.toFixed(4);
+    document.getElementById("idxSub").textContent =
+      "1M: " + fmt(chg, 2) + "% (cap-weighted) vs " + fmt(eqChg, 2) + "% (equal-weight) \u00b7 " +
+      indexData.n + " stocks \u00b7 weights as of 14 Nov 2026";
+    drawMulti(document.getElementById("idxChart"), [
+      { data: cap, color: "#38bdf8" },
+      { data: eq, color: "#f59e0b" },
+    ]);
   } else {
     panel.style.display = "none";
   }
 
   document.getElementById("footer").textContent = (lastUpdated
     ? "Last updated " + lastUpdated.toLocaleTimeString()
-    : apiKey ? "Loading\u2026" : "Waiting for API key\u2026") +
+    : "Loading\u2026") +
     (failedSymbols.length ? " \u00b7 no data: " + failedSymbols.join(", ") : "") +
-    " \u00b7 US market hours 15:30\u201322:00 Madrid time (prices move only while open)";
+    " \u00b7 Data: Yahoo Finance (unofficial spark API, no key) via CORS proxy chain (allorigins \u2192 codetabs \u2192 jina)" +
+    " \u00b7 US market hours 15:30\u201322:00 Madrid time";
 }
 
 function stat(label, value, tone) {
@@ -556,49 +620,28 @@ function setLoading(v) {
 }
 function syncTimer() {
   if (timer) { clearInterval(timer); timer = null; }
-  if (autoRefresh && apiKey) timer = setInterval(fetchQuotes, 180000);
+  if (autoRefresh) timer = setInterval(fetchQuotes, 180000);
 }
 
 // wiring
-document.getElementById("btnKey").addEventListener("click", () => {
-  const box = document.getElementById("keybox");
-  box.style.display = box.style.display === "none" ? "block" : "none";
-  if (box.style.display === "block") document.getElementById("keyInput").focus();
-});
-function saveKey() {
-  const k = document.getElementById("keyInput").value.trim();
-  if (!k) return;
-  localStorage.setItem("finnhub_key", k);
-  apiKey = k;
-  document.getElementById("keybox").style.display = "none";
-  syncTimer();
-  fetchQuotes();
-}
-document.getElementById("btnSave").addEventListener("click", saveKey);
-document.getElementById("keyInput").addEventListener("keydown", e => {
-  if (e.key === "Enter") saveKey();
-});
-document.getElementById("btnRemove").addEventListener("click", () => {
-  localStorage.removeItem("finnhub_key");
-  apiKey = ""; quotes = {}; lastUpdated = null;
-  document.getElementById("keyInput").value = "";
-  document.getElementById("keybox").style.display = "block";
-  showError(null);
-  syncTimer(); render();
-});
 document.getElementById("btnRefresh").addEventListener("click", fetchQuotes);
 document.getElementById("tabs").addEventListener("click", e => {
   const t = e.target.closest("[data-tab]");
   if (t) { activeTab = t.dataset.tab; render(); }
 });
 
-// open the key box on first run
-if (!apiKey) document.getElementById("keybox").style.display = "block";
-else document.getElementById("keyInput").value = apiKey;
+// init: load cached quotes, then fetch fresh
+try {
+  const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+  if (c && c.quotes) {
+    quotes = c.quotes;
+    indexData = computeIndex(quotes);
+  }
+} catch (e) {}
 
 syncTimer();
 render();
-if (apiKey) fetchQuotes();
+fetchQuotes();
 </script>
 </body>
 </html>
