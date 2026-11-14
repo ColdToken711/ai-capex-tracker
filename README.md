@@ -31,6 +31,7 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 
 - **Live quote cards** — price, day change (absolute + %), per stock, grouped in tabs.
 - **Three timeframes — 1M / 1W / 1D** — one click switches the whole board: monthly daily closes, weekly 15-minute bars, or intraday 5-minute bars. The index recomputes per timeframe. Day change always means "vs yesterday's close" on every view — never vs the last bar, which on intraday views would read ~0%. The 1D chart anchors its line at yesterday's close, so overnight gaps (earnings pops, gap-ups) show up in the chart instead of contradicting the day change.
+- **Chart hover** — move the cursor over any chart to read exact values: the index chart shows a crosshair with the date/time and the % of both index lines, and each stock sparkline shows price + time in its caption.
 - **Real 1-month trendlines** — a `<canvas>` sparkline per stock drawn from actual daily closes on Yahoo Finance. No waiting for history to accumulate — you get a month of real data on first load.
 - **AI Capex Index** — a market-cap-weighted basket of all 58 names, plotted against an equal-weighted version of the same basket. The gap between the two lines shows whether the boom is concentrated in the giants or broadening to smaller names.
 - **No key, no quota** — quotes come from Yahoo's unofficial `spark` endpoint, 15 symbols per request, so a full refresh is 4 calls instead of 58.
@@ -72,6 +73,7 @@ LICENSE
 
 ## Changelog
 
+- **Nov 2026** — Chart hover: crosshair with dates and values on the index chart, price + time on stock sparklines.
 - **Nov 2026** — 1D charts now anchor at yesterday's close, so overnight gaps (a stock that gaps up +27% then fades no longer shows a falling chart next to a big green day change).
 - **Nov 2026** — Added the 1M / 1W / 1D timeframe switcher (daily, 15-min, and 5-min bars), with per-timeframe caching and a generation guard for mid-refresh switches.
 - **Nov 2026** — Migrated from Finnhub (API key required, US-only, no history on free tier) to Yahoo Finance: no key needed, real 1-month daily trends, 4 batched requests per refresh instead of 58. Dropped JNPR (delisted — HPE acquisition completed), PSTG and IRBT (recycled ticker shells on Yahoo); added NTAP (NetApp) and SERV (Serve Robotics).
