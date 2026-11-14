@@ -30,6 +30,7 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 ## Features
 
 - **Live quote cards** — price, day change (absolute + %), per stock, grouped in tabs.
+- **Three timeframes — 1M / 1W / 1D** — one click switches the whole board: monthly daily closes, weekly 15-minute bars, or intraday 5-minute bars. The index recomputes per timeframe. Day change always means "vs yesterday's close" on every view — never vs the last bar, which on intraday views would read ~0%.
 - **Real 1-month trendlines** — a `<canvas>` sparkline per stock drawn from actual daily closes on Yahoo Finance. No waiting for history to accumulate — you get a month of real data on first load.
 - **AI Capex Index** — a market-cap-weighted basket of all 58 names, plotted against an equal-weighted version of the same basket. The gap between the two lines shows whether the boom is concentrated in the giants or broadening to smaller names.
 - **No key, no quota** — quotes come from Yahoo's unofficial `spark` endpoint, 15 symbols per request, so a full refresh is 4 calls instead of 58.
@@ -40,20 +41,20 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 
 **Data.** Quotes and history come from Yahoo Finance's unofficial endpoints:
 
-- `/v8/finance/spark?symbols=…&range=1mo&interval=1d` — batched, 15 symbols per call, returns a month of daily closes plus the live price.
-- `/v8/finance/chart/{sym}?range=1mo&interval=1d` — single-symbol fallback for stragglers.
+- `/v8/finance/spark?symbols=…&range={1mo|5d|1d}&interval={1d|15m|5m}` — batched, 15 symbols per call, returns the timeframe's closes plus the live price and previous close.
+- `/v8/finance/chart/{sym}?range=…&interval=…` — single-symbol fallback for stragglers.
 
 Browsers can't call Yahoo directly (it sends no CORS header), so every request is routed through a public proxy. If one proxy is down, the next in the chain takes over.
 
-**Index methodology.** Each stock is normalized to its first close of the 1-month window, then blended:
+**Index methodology.** Each stock is normalized to its first close of the selected window, then blended:
 
 ```
 index_level = Σ  weightᵢ × (priceᵢ / first_closeᵢ)
 ```
 
-Both lines start at 1.0, so the level reads directly as "the basket is up X% over the past month." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line.
+Both lines start at 1.0, so the level reads directly as "the basket is up X% over this window." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line.
 
-**Storage.** A single `localStorage` key, `capex_cache_v1`, holds the latest quotes snapshot so the app paints instantly on reload and fetches fresh data in the background.
+**Storage.** Per-timeframe caches (`capex_cache_v1_1M` / `_1W` / `_1D`) hold the latest quotes snapshot so switching views paints instantly and fetches fresh data in the background; `capex_tf` remembers your preferred timeframe between sessions. A generation counter guards refreshes: if you switch timeframes mid-refresh, the stale fetch discards itself instead of writing old data onto the new view.
 
 ## Project layout
 
@@ -71,6 +72,7 @@ LICENSE
 
 ## Changelog
 
+- **Nov 2026** — Added the 1M / 1W / 1D timeframe switcher (daily, 15-min, and 5-min bars), with per-timeframe caching and a generation guard for mid-refresh switches.
 - **Nov 2026** — Migrated from Finnhub (API key required, US-only, no history on free tier) to Yahoo Finance: no key needed, real 1-month daily trends, 4 batched requests per refresh instead of 58. Dropped JNPR (delisted — HPE acquisition completed), PSTG and IRBT (recycled ticker shells on Yahoo); added NTAP (NetApp) and SERV (Serve Robotics).
 
 ## Roadmap ideas
