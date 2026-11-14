@@ -441,12 +441,17 @@ function computeIndex(q) {
   const dates = [...datesSet].sort((a, b) => a - b);
   const cap = [], eq = [];
   const lastSeen = {};
+  // Seed every stock at its base price: until it has a datapoint in the
+  // window, it counts at ratio 1.0 (held where it started). Without this,
+  // the basket only fills up as stocks deliver their first bar \\u2014 an
+  // all-US basket opens nearly together so the steps are small, but a
+  // delayed or failed fetch would still dent the line when it joins.
+  syms.forEach(s => { lastSeen[s] = q[s].hist[0].p; });
   for (const t of dates) {
     let capV = 0, eqV = 0;
     for (const s of syms) {
       const h = q[s].hist.find(x => x.t === t);
       if (h) lastSeen[s] = h.p;
-      if (lastSeen[s] == null) continue;
       const r = lastSeen[s] / q[s].hist[0].p;
       capV += (MCAPS[s] / capSum) * r;
       eqV += r / syms.length;

@@ -52,7 +52,7 @@ Browsers can't call Yahoo directly (it sends no CORS header), so every request i
 index_level = Σ  weightᵢ × (priceᵢ / first_closeᵢ)
 ```
 
-Both lines start at 1.0, so the level reads directly as "the basket is up X% over this window." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line.
+Both lines start at 1.0, so the level reads directly as "the basket is up X% over this window." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line; stocks that haven't reported a bar yet in the window are held at their base price rather than excluded, so the basket is complete from the first point.
 
 **Storage.** Per-timeframe caches (`capex_cache_v1_1M` / `_1W` / `_1D`) hold the latest quotes snapshot so switching views paints instantly and fetches fresh data in the background; `capex_tf` remembers your preferred timeframe between sessions. A generation counter guards refreshes: if you switch timeframes mid-refresh, the stale fetch discards itself instead of writing old data onto the new view.
 
