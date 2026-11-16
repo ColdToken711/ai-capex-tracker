@@ -2,7 +2,7 @@
 
 A self-contained, single-file web app that tracks the **AI infrastructure capex boom** — 58 stocks across 12 segments of the AI compute supply chain, with live quotes, real 1-month trendlines, and a market-cap-weighted index comparing cap-weighted vs equal-weighted performance.
 
-No build step. No dependencies. No backend. No API key. One HTML file and your browser.
+No build step. No dependencies. No backend. No API key. One HTML file and your browser. (The only external asset is the optional pixel-font stylesheet used by the retro theme; the app works fine without it.)
 
 ## Quick start
 
@@ -32,6 +32,8 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 - **Live quote cards** — price, day change (absolute + %), per stock, grouped in tabs.
 - **Three timeframes — 1M / 1W / 1D** — one click switches the whole board: monthly daily closes, weekly 15-minute bars, or intraday 5-minute bars. The index recomputes per timeframe. Day change always means "vs yesterday's close" on every view — never vs the last bar, which on intraday views would read ~0%. The 1D chart anchors its line at yesterday's close, so overnight gaps (earnings pops, gap-ups) show up in the chart instead of contradicting the day change.
 - **Chart hover** — move the cursor over any chart to read exact values: the index chart shows a crosshair with the date/time and the % of both index lines, and each stock sparkline shows price + time in its caption.
+- **News ticker + 📰 News tab** — the 20 newest AI-market headlines scroll continuously across a bar pinned to the top of the page, with a colored dot per source. Hovering pauses the scroll, clicking a headline opens the story, and the feed refreshes itself every 30 minutes. The News tab shows the full list with per-source filter chips. Sources: TechCrunch AI, Ars Technica AI, MIT Tech Review, ZDNET AI and MarkTechPost via RSS (the parser handles both RSS and Atom formats).
+- **Retro CRT layout** — a `RETRO` toggle in the header switches the whole app into an 80s/90s green-phosphor terminal: Press Start 2P headers, VT323 body text, chunky square borders, scanlines and a soft CRT glow. The charts re-skin to the phosphor palette with thicker lines, but render at full resolution so values and tooltips stay crisp. Your choice is remembered; the pixel fonts load from Google Fonts and fall back to monospace offline.
 - **Real 1-month trendlines** — a `<canvas>` sparkline per stock drawn from actual daily closes on Yahoo Finance. No waiting for history to accumulate — you get a month of real data on first load.
 - **AI Capex Index** — a market-cap-weighted basket of all 58 names, plotted against an equal-weighted version of the same basket. The gap between the two lines shows whether the boom is concentrated in the giants or broadening to smaller names.
 - **No key, no quota** — quotes come from Yahoo's unofficial `spark` endpoint, 15 symbols per request, so a full refresh is 4 calls instead of 58.
@@ -73,6 +75,8 @@ LICENSE
 
 ## Changelog
 
+- **Nov 2026** — News ticker + News tab: 5 AI-market RSS feeds (TechCrunch, Ars Technica, MIT Tech Review, ZDNET, MarkTechPost) with a scrolling ticker pinned to the top; proxy chain now tracks dead proxies separately for quotes vs news.
+- **Nov 2026** — Retro CRT theme toggle: green-phosphor layout with Press Start 2P + VT323 fonts, charts re-skinned via CSS-variable palette at full resolution; preference persisted.
 - **Nov 2026** — Chart hover: crosshair with dates and values on the index chart, price + time on stock sparklines.
 - **Nov 2026** — 1D charts now anchor at yesterday's close, so overnight gaps (a stock that gaps up +27% then fades no longer shows a falling chart next to a big green day change).
 - **Nov 2026** — Added the 1M / 1W / 1D timeframe switcher (daily, 15-min, and 5-min bars), with per-timeframe caching and a generation guard for mid-refresh switches.

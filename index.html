@@ -4,11 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Capex Boom Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- pixel fonts for the retro CRT theme; falls back to monospace offline -->
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=VT323&amp;display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #020617; --panel: #0f172a; --border: #1e293b;
     --text: #f1f5f9; --muted: #94a3b8; --dim: #64748b;
     --up: #34d399; --down: #fb7185; --accent: #0ea5e9;
+    /* chart colors live in CSS variables so the canvas layer re-skins with the theme */
+    --line-cap: #38bdf8; --line-eq: #f59e0b; --line-base: #334155;
+    --fill-up: rgba(52,211,153,.10); --fill-down: rgba(251,113,133,.10);
+    --tip-bg: rgba(2,6,23,.94);
+    --tip-font: 11px ui-sans-serif, system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 16px; }
@@ -64,11 +73,91 @@
   .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); align-items: center; }
   .legend .k { display: inline-flex; align-items: center; gap: 5px; }
   .legend .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+  /* News ticker */
+  #ticker { position: sticky; top: 0; z-index: 40; display: flex; align-items: stretch; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  #ticker .tlabel { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--up); padding: 8px 12px; border-right: 1px solid var(--border); text-transform: uppercase; white-space: nowrap; }
+  #ticker .tview { flex: 1 1 auto; overflow: hidden; }
+  #ticker .track { display: inline-flex; white-space: nowrap; align-items: center; will-change: transform; animation: tickmove 60s linear infinite; }
+  #ticker:hover .track { animation-play-state: paused; }
+  @keyframes tickmove { to { transform: translateX(-50%); } }
+  .thalf { display: inline-flex; align-items: center; }
+  a.titem { display: inline-flex; align-items: center; gap: 7px; padding: 8px 0; color: var(--text); text-decoration: none; font-size: 13px; }
+  a.titem:hover { color: var(--accent); }
+  a.titem .tdot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; }
+  .tsep { padding: 0 16px; color: var(--dim); font-size: 11px; flex: 0 0 auto; }
+  .tsep::after { content: "\2022"; }
+
+  /* News feed */
+  #newsPanel { display: none; margin-top: 14px; }
+  .news-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .news-head h2 { margin: 0; font-size: 17px; }
+  .news-head .nmeta { color: var(--muted); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+  .chip { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 4px 11px; border-radius: 999px; font-size: 12px; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  a.news-item { display: block; padding: 13px 6px; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; }
+  a.news-item:hover { background: rgba(14, 165, 233, 0.05); }
+  .news-item .nt { font-weight: 600; font-size: 14.5px; line-height: 1.35; }
+  .news-item .nsnip { color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
+  .news-item .nrow { margin-top: 5px; font-size: 11.5px; color: var(--dim); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .nsrc { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.3px; }
+
+  /* ============ RETRO THEME: 80s/90s green-phosphor CRT ============ */
+  body.retro {
+    --bg: #010b04; --panel: #031a0b; --border: #1e5c2e;
+    --text: #ccffd8; --muted: #7ee08e; --dim: #45b568;
+    --up: #39ff6e; --down: #ff5b6a; --accent: #39ff6e; --sky: #7dffc4; --amber: #ffd94a;
+    --line-cap: #39ff6e; --line-eq: #ffd94a; --line-base: #1e5c2e;
+    --fill-up: rgba(57,255,110,.12); --fill-down: rgba(255,91,106,.12);
+    --tip-bg: rgba(1,11,4,.95);
+    --tip-font: 19px "VT323", "Courier New", monospace;
+  }
+  body.retro { font-family: "VT323", "Courier New", monospace; font-size: 17px; letter-spacing: .02em; text-shadow: 0 0 3px rgba(57,255,110,.14); }
+  body.retro::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999; background: repeating-linear-gradient(0deg, rgba(0,0,0,.09) 0 1px, transparent 1px 4px); }
+  body.retro::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 998; background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.28) 100%); }
+  body.retro h1 { font-family: "Press Start 2P", "VT323", monospace; font-size: 15px; letter-spacing: 0; text-shadow: 0 0 9px rgba(57,255,110,.55); }
+  body.retro .sub { font-size: 17px; }
+  body.retro .card { border-radius: 0; border-width: 2px; box-shadow: 4px 4px 0 rgba(0,0,0,.55); }
+  body.retro button, body.retro .tfbox, body.retro .chip, body.retro .badge, body.retro .tabs { border-radius: 0; }
+  body.retro button { border-width: 2px; font-size: 16px; box-shadow: 2px 2px 0 rgba(0,0,0,.55); text-transform: uppercase; }
+  body.retro button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 rgba(0,0,0,.55); }
+  body.retro button.primary { color: #012b0e; }
+  body.retro .badge { font-family: "Press Start 2P", "VT323", monospace; font-size: 9px; letter-spacing: 0; }
+  body.retro .tfbtn { font-size: 16px; }
+  body.retro .tfbtn.active, body.retro .tab.active, body.retro .chip.on { color: #012b0e; }
+  body.retro .autobox { font-size: 16px; }
+  body.retro .stat .label, body.retro .idx .label { font-family: "Press Start 2P", "VT323", monospace; font-size: 9px; letter-spacing: .06em; }
+  body.retro .stat .value { font-size: 20px; text-shadow: 0 0 7px currentColor; }
+  body.retro .idx .ival { font-size: 28px; text-shadow: 0 0 7px currentColor; }
+  body.retro .stock:hover { border-color: var(--up); }
+  body.retro .stock .sym { text-shadow: 0 0 6px currentColor; }
+  body.retro .stock .name { font-size: 15px; }
+  body.retro .stock .price { font-size: 24px; }
+  body.retro .legend { font-size: 14px; }
+  body.retro .stock .trendcap, body.retro .idx .isub { font-size: 14px; }
+  body.retro .tag { border-radius: 0; }
+  body.retro .legend .dot { border-radius: 0; }
+  body.retro .footer { font-size: 15px; }
+  body.retro #ticker { border-radius: 0; border-width: 2px; }
+  body.retro #ticker .tlabel { font-family: "Press Start 2P", "VT323", monospace; font-size: 9px; letter-spacing: 0; }
+  body.retro a.titem { font-size: 17px; }
+  body.retro .tsep::after { content: "+++"; }
+  body.retro .tab { font-size: 16px; text-transform: uppercase; }
+  body.retro .chip { font-size: 16px; }
+  body.retro .news-head h2 { font-family: "Press Start 2P", "VT323", monospace; font-size: 13px; }
+  body.retro .news-item .nt { font-size: 18px; }
+  body.retro .news-item .nsnip { font-size: 16px; }
+  body.retro .news-item .nrow { font-size: 14px; }
+  body.retro .nsrc { border-radius: 0; font-size: 13px; }
   @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div id="ticker">
+    <span class="tlabel">&#9612; AI market news</span>
+    <div class="tview"><div class="track" id="tickerTrack"></div></div>
+  </div>
   <div class="flex">
     <div>
       <h1>AI Capex Boom Tracker</h1>
@@ -77,6 +166,7 @@
     <div class="actions">
       <span class="badge wait" id="badge">WAIT</span>
       <span class="tfbox" id="tfbox"></span>
+      <button id="btnTheme" title="Switch between the modern layout and the retro CRT one">RETRO: OFF</button>
       <button id="btnRefresh">Refresh now</button>
     </div>
   </div>
@@ -93,8 +183,8 @@
         <div class="isub" id="idxSub"></div>
       </div>
       <div class="legend">
-        <span class="k"><span class="dot" style="background:#38bdf8"></span>market-cap weighted</span>
-        <span class="k"><span class="dot" style="background:#f59e0b"></span>equal weighted</span>
+        <span class="k"><span class="dot" style="background:var(--line-cap)"></span>market-cap weighted</span>
+        <span class="k"><span class="dot" style="background:var(--line-eq)"></span>equal weighted</span>
       </div>
     </div>
     <canvas id="idxChart"></canvas>
@@ -102,6 +192,15 @@
 
   <div class="tabs" id="tabs"></div>
   <div class="grid" id="grid"></div>
+  <div id="newsPanel">
+    <div class="news-head">
+      <h2>&#128240; AI market news</h2>
+      <span class="nmeta" id="newsMeta"></span>
+      <button class="chip" id="btnNewsRefresh">Refresh news</button>
+    </div>
+    <div class="chips" id="newsChips"></div>
+    <div id="newsList"></div>
+  </div>
   <p class="footer" id="footer">Loading&hellip;</p>
 </div>
 
@@ -301,37 +400,42 @@ const QUOTE_PROXIES = [
   // strips it. Only viable because we batch 15 symbols per request.
   u => "https://r.jina.ai/" + u,
 ];
-let proxyIdx = 0;
-const proxyDeadUntil = [];
+let proxyIdx = { quotes: 0, news: 0 };
+const proxyDeadUntil = { quotes: [], news: [] };
 const PROXY_COOLDOWN = 10 * 60 * 1000;
 
-async function proxyFetch(url) {
+async function proxyFetch(url, kind) {
+  // quotes and news share the same proxy chain but track dead proxies
+  // separately, so a feed-host failure never benches the quote fetches
+  kind = kind || "quotes";
+  const chain = QUOTE_PROXIES;
+  const dead = proxyDeadUntil[kind];
   let order = [];
-  for (let k = 0; k < QUOTE_PROXIES.length; k++) {
-    const i = (proxyIdx + k) % QUOTE_PROXIES.length;
-    if (proxyDeadUntil[i] && Date.now() < proxyDeadUntil[i]) continue;
+  for (let k = 0; k < chain.length; k++) {
+    const i = (proxyIdx[kind] + k) % chain.length;
+    if (dead[i] && Date.now() < dead[i]) continue;
     order.push(i);
   }
   if (!order.length) {
     // everything in cooldown \u2014 try once anyway, it may have recovered
-    for (let k = 0; k < QUOTE_PROXIES.length; k++) order.push((proxyIdx + k) % QUOTE_PROXIES.length);
+    for (let k = 0; k < chain.length; k++) order.push((proxyIdx[kind] + k) % chain.length);
   }
   let lastErr = null;
   for (const i of order) {
     try {
       const opts = typeof AbortSignal !== "undefined" && AbortSignal.timeout
         ? { signal: AbortSignal.timeout(15000) } : {};
-      const r = await fetch(QUOTE_PROXIES[i](url), opts);
+      const r = await fetch(chain[i](url), opts);
       if (!r.ok) throw new Error("HTTP " + r.status);
       const t = await r.text();
       const trimmed = (t || "").trim();
       if (trimmed.length < 25 || /^(error code|oops|rate limit|too many)/i.test(trimmed)) {
         throw new Error("proxy refused");
       }
-      proxyIdx = i;
-      proxyDeadUntil[i] = 0;
+      proxyIdx[kind] = i;
+      dead[i] = 0;
       return t;
-    } catch (e) { lastErr = e; proxyDeadUntil[i] = Date.now() + PROXY_COOLDOWN; }
+    } catch (e) { lastErr = e; dead[i] = Date.now() + PROXY_COOLDOWN; }
   }
   throw lastErr || new Error("all proxies failed");
 }
@@ -462,15 +566,46 @@ function computeIndex(q) {
   return { cap: cap, eq: eq, n: syms.length };
 }
 
+// ---------------------------------------------------------------
+// Theme system: chart colors are read from CSS variables, so the whole
+// canvas layer re-skins the moment body.retro is toggled. Charts render
+// at full resolution in both themes; the retro feel comes from the
+// palette, thicker lines and the CSS scanline overlay — not from
+// pixelating the canvas.
+let chartC = null;
+const THEME_KEY = "capex_theme";
+function readChartColors() {
+  const cs = getComputedStyle(document.body);
+  const v = n => cs.getPropertyValue(n).trim();
+  chartC = {
+    up: v("--up"), down: v("--down"),
+    upFill: v("--fill-up"), downFill: v("--fill-down"),
+    cap: v("--line-cap"), eq: v("--line-eq"), base: v("--line-base"),
+    cross: v("--dim"), ring: v("--bg"),
+    tipBg: v("--tip-bg"), tipBorder: v("--border"),
+    tipText: v("--text"), tipMuted: v("--muted"), tipFont: v("--tip-font"),
+  };
+}
+function applyTheme(mode, rerender) {
+  const retro = mode === "retro";
+  document.body.classList.toggle("retro", retro);
+  readChartColors();
+  const b = document.getElementById("btnTheme");
+  if (b) b.textContent = retro ? "RETRO: ON" : "RETRO: OFF";
+  try { localStorage.setItem(THEME_KEY, retro ? "retro" : "modern"); } catch (e) {}
+  if (rerender) render();
+}
+
 // last-drawn index chart state, for the hover crosshair
 let multiLast = null;
 
 function drawMulti(cv, series, hoverI) {
-  const dpr = window.devicePixelRatio || 1;
+  const retro = document.body.classList.contains("retro");
+  const scale = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 600, h = cv.clientHeight || 120;
-  cv.width = w * dpr; cv.height = h * dpr;
+  cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
   const ctx = cv.getContext("2d");
-  ctx.scale(dpr, dpr);
+  ctx.scale(scale, scale);
   let min = Infinity, max = -Infinity;
   series.forEach(s => s.data.forEach(d => { if (d.v < min) min = d.v; if (d.v > max) max = d.v; }));
   if (!isFinite(min) || series.some(s => s.data.length < 2)) return;
@@ -481,13 +616,13 @@ function drawMulti(cv, series, hoverI) {
   if (min <= 1 && max >= 1) { // baseline at index start = 1.0
     ctx.beginPath(); ctx.setLineDash([3, 4]);
     ctx.moveTo(0, Y(1)); ctx.lineTo(w, Y(1));
-    ctx.strokeStyle = "#334155"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = chartC.base; ctx.lineWidth = 1; ctx.stroke();
     ctx.setLineDash([]);
   }
   series.forEach(s => {
     ctx.beginPath();
     s.data.forEach((d, i) => i ? ctx.lineTo(X(s.data, i), Y(d.v)) : ctx.moveTo(X(s.data, 0), Y(d.v)));
-    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = s.color; ctx.lineWidth = retro ? 3 : 2; ctx.stroke();
     const last = s.data[s.data.length - 1];
     ctx.beginPath();
     ctx.arc(X(s.data, s.data.length - 1), Y(last.v), 3.5, 0, Math.PI * 2);
@@ -500,28 +635,29 @@ function drawMulti(cv, series, hoverI) {
     const hx = X(base, i);
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(hx, 2); ctx.lineTo(hx, h - 2);
-    ctx.strokeStyle = "#64748b"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = chartC.cross; ctx.lineWidth = 1; ctx.stroke();
     ctx.setLineDash([]);
     series.forEach(s => {
       const v = s.data[i].v;
       ctx.beginPath();
       ctx.arc(hx, Y(v), 4, 0, Math.PI * 2);
       ctx.fillStyle = s.color; ctx.fill();
-      ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = chartC.ring; ctx.lineWidth = 1.5; ctx.stroke();
     });
-    // tooltip box
-    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+    // tooltip box — line spacing must scale with the (theme-dependent) font
+    ctx.font = chartC.tipFont;
+    const lineH = retro ? 23 : 15;
     const lines = [fmtTs(base[i].t)];
     series.forEach((s, k) => {
       lines.push((s.label || "line " + (k + 1)) + ": " + fmt((s.data[i].v - 1) * 100, 2) + "%");
     });
-    const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width)) + 28;
-    const th = lines.length * 15 + 12;
+    const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width)) + (retro ? 34 : 28);
+    const th = lines.length * lineH + 16;
     let bx = hx + 12; if (bx + tw > w - 4) bx = hx - tw - 12;
     if (bx < 4) bx = 4;
     const by = 6;
-    ctx.fillStyle = "rgba(2,6,23,0.94)";
-    ctx.strokeStyle = "#334155"; ctx.lineWidth = 1;
+    ctx.fillStyle = chartC.tipBg;
+    ctx.strokeStyle = chartC.tipBorder; ctx.lineWidth = 1;
     ctx.beginPath();
     const r = 6, x2 = bx + tw, y2 = by + th;
     ctx.moveTo(bx + r, by); ctx.lineTo(x2 - r, by); ctx.arcTo(x2, by, x2, by + r, r);
@@ -530,13 +666,13 @@ function drawMulti(cv, series, hoverI) {
     ctx.lineTo(bx, by + r); ctx.arcTo(bx, by, bx + r, by, r);
     ctx.closePath(); ctx.fill(); ctx.stroke();
     lines.forEach((l, k) => {
-      const ly = by + 14 + k * 15;
+      const ly = by + 16 + k * lineH;
       if (k > 0) { // colored bullet for each series line
         ctx.beginPath();
-        ctx.arc(bx + 10, ly - 4, 3, 0, Math.PI * 2);
+        ctx.arc(bx + (retro ? 12 : 10), ly - 6, retro ? 4 : 3, 0, Math.PI * 2);
         ctx.fillStyle = series[k - 1].color; ctx.fill();
       }
-      ctx.fillStyle = k === 0 ? "#94a3b8" : "#e2e8f0";
+      ctx.fillStyle = k === 0 ? chartC.tipMuted : chartC.tipText;
       ctx.fillText(l, bx + (k > 0 ? 20 : 10), ly);
     });
   }
@@ -587,26 +723,27 @@ async function fetchQuotes() {
 }
 
 function drawSpark(cv, data, up, hoverI) {
-  const dpr = window.devicePixelRatio || 1;
+  const retro = document.body.classList.contains("retro");
+  const scale = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 280, h = cv.clientHeight || 52;
-  cv.width = w * dpr; cv.height = h * dpr;
+  cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
   const ctx = cv.getContext("2d");
-  ctx.scale(dpr, dpr);
+  ctx.scale(scale, scale);
   const ps = data.map(d => d.p);
   const min = Math.min.apply(null, ps), max = Math.max.apply(null, ps);
   const span = (max - min) || 1;
   const X = i => (i / (data.length - 1)) * (w - 8) + 4;
   const Y = p => h - 6 - ((p - min) / span) * (h - 12);
-  const color = up ? "#34d399" : "#fb7185";
+  const color = up ? chartC.up : chartC.down;
   ctx.clearRect(0, 0, w, h);
   ctx.beginPath();
   data.forEach((d, i) => i ? ctx.lineTo(X(i), Y(d.p)) : ctx.moveTo(X(0), Y(d.p)));
   ctx.lineTo(X(data.length - 1), h); ctx.lineTo(X(0), h); ctx.closePath();
-  ctx.fillStyle = up ? "rgba(52,211,153,0.10)" : "rgba(251,113,133,0.10)";
+  ctx.fillStyle = up ? chartC.upFill : chartC.downFill;
   ctx.fill();
   ctx.beginPath();
   data.forEach((d, i) => i ? ctx.lineTo(X(i), Y(d.p)) : ctx.moveTo(X(0), Y(d.p)));
-  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = retro ? 2 : 1.5; ctx.stroke();
   ctx.beginPath();
   ctx.arc(X(data.length - 1), Y(ps[ps.length - 1]), 3, 0, Math.PI * 2);
   ctx.fillStyle = color; ctx.fill();
@@ -615,14 +752,16 @@ function drawSpark(cv, data, up, hoverI) {
     const i = Math.max(0, Math.min(data.length - 1, hoverI));
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(X(i), 2); ctx.lineTo(X(i), h - 2);
-    ctx.strokeStyle = "#64748b"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = chartC.cross; ctx.lineWidth = 1; ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.arc(X(i), Y(data[i].p), 4, 0, Math.PI * 2);
     ctx.fillStyle = color; ctx.fill();
-    ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = chartC.ring; ctx.lineWidth = 1.5; ctx.stroke();
   }
 }
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 function fmt(n, d) { return (n >= 0 ? "+" : "") + n.toFixed(d); }
 // timestamp for chart hovers: date on 1M, date + time on intraday windows
@@ -670,7 +809,8 @@ function render() {
   document.getElementById("tabs").innerHTML =
     WATCHLIST.map(g => '<button class="tab' + (activeTab === g.group ? " active" : "") +
       '" data-tab="' + g.group + '">' + g.group + "</button>").join("") +
-    '<button class="tab' + (activeTab === "All" ? " active" : "") + '" data-tab="All">All</button>';
+    '<button class="tab' + (activeTab === "All" ? " active" : "") + '" data-tab="All">All</button>' +
+    '<button class="tab' + (activeTab === "News" ? " active" : "") + '" data-tab="News">\uD83D\uDCF0 News</button>';
 
   // grid
   const grid = document.getElementById("grid");
@@ -725,8 +865,8 @@ function render() {
       tf + ": " + fmt(chg, 2) + "% (cap-weighted) vs " + fmt(eqChg, 2) + "% (equal-weight) \u00b7 " +
       indexData.n + " stocks \u00b7 weights as of 14 Nov 2026";
     drawMulti(document.getElementById("idxChart"), [
-      { data: cap, color: "#38bdf8", label: "cap-weighted" },
-      { data: eq, color: "#f59e0b", label: "equal-weighted" },
+      { data: cap, color: chartC.cap, label: "cap-weighted" },
+      { data: eq, color: chartC.eq, label: "equal-weighted" },
     ]);
   } else {
     panel.style.display = "none";
@@ -737,7 +877,9 @@ function render() {
     : "Loading\u2026") +
     (failedSymbols.length ? " \u00b7 no data: " + failedSymbols.join(", ") : "") +
     " \u00b7 Data: Yahoo Finance (unofficial spark API, no key) via CORS proxy chain (allorigins \u2192 codetabs \u2192 jina)" +
-    " \u00b7 US market hours 15:30\u201322:00 Madrid time";
+    " \u00b7 US market hours 15:30\u201322:00 Madrid time" +
+    " \u00b7 News: TechCrunch, Ars Technica, MIT Tech Review, ZDNET & MarkTechPost via RSS \u00b7 quotes every 3 min, news every 30 min";
+  renderNews();
 }
 
 function stat(label, value, tone) {
@@ -776,8 +918,183 @@ function setTf(t) {
   fetchQuotes();
 }
 
+// ---------------------------------------------------------------
+// AI market news: 5 RSS feeds fetched through the same proxy chain
+// as the quotes (with the r.jina.ai reader as fallback — it converts
+// feeds to markdown). Merged, deduped and sorted newest-first. The
+// parser handles both RSS (<item>) and Atom (<entry>) formats.
+// ---------------------------------------------------------------
+const NEWS_KEY = "capex_news_v1";
+const NEWS_TTL = 30 * 60 * 1000; // refetch at most every 30 min
+const NEWS_FEEDS = [
+  { id: "tc",  name: "TechCrunch AI",    url: "https://techcrunch.com/category/artificial-intelligence/feed/", color: "#38bdf8" },
+  { id: "ars", name: "Ars Technica AI",  url: "https://arstechnica.com/ai/feed/",                                 color: "#34d399" },
+  { id: "mit", name: "MIT Tech Review",  url: "https://www.technologyreview.com/topic/artificial-intelligence/feed/", color: "#f59e0b" },
+  { id: "zn",  name: "ZDNET AI",         url: "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",       color: "#a78bfa" },
+  { id: "mtp", name: "MarkTechPost",     url: "https://marktechpost.com/feed/",                                  color: "#f472b6" },
+];
+let newsItems = [];
+let newsLoading = false;
+let newsUpdatedAt = null;
+let newsFilter = "all";
+
+function parseFeedXML(text, feed) {
+  const out = [];
+  try {
+    const doc = new DOMParser().parseFromString(text, "text/xml");
+    doc.querySelectorAll("item, entry").forEach(it => {
+      const title = (it.querySelector("title") || {}).textContent || "";
+      let link = "";
+      const l = it.querySelector("link");
+      if (l) link = l.getAttribute ? (l.getAttribute("href") || l.textContent || "") : (l.textContent || "");
+      const pub = (it.querySelector("pubDate") || it.querySelector("updated") || it.querySelector("published") || {}).textContent || "";
+      const desc = (it.querySelector("description") || it.querySelector("summary") || {}).textContent || "";
+      out.push({
+        title: title, link: link,
+        date: pub ? new Date(pub) : null,
+        source: feed.name, sid: feed.id, color: feed.color,
+        snippet: desc.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160),
+      });
+    });
+  } catch (e) {}
+  return out;
+}
+
+function parseFeedJina(text, feed) {
+  // r.jina.ai renders RSS as markdown: "### [Title](url)" + a date
+  // line. Format validated against the TechCrunch feed on 16 Nov 2026.
+  const out = [];
+  for (const c of text.split("\n### [").slice(1)) {
+    const m = c.match(/^([^\]]+)\]\((https?:\/\/[^\)]+)\)/);
+    if (!m) continue;
+    const d = c.match(/[A-Z][a-z]{2}, \d{1,2} [A-Z][a-z]{2} \d{4} [\d:]+ (?:\+0000|GMT)/);
+    let snippet = "";
+    for (const line of c.split("\n").slice(1)) {
+      const t = line.trim();
+      if (!t || /^\[?https?:\/\//.test(t) || /^[A-Z][a-z]{2}, \d/.test(t) || t.startsWith("[")) continue;
+      snippet = t.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_#]/g, "").slice(0, 160);
+      break;
+    }
+    out.push({
+      title: m[1], link: m[2],
+      date: d ? new Date(d[0].replace("GMT", "+0000")) : null,
+      source: feed.name, sid: feed.id, color: feed.color,
+      snippet: snippet,
+    });
+  }
+  return out;
+}
+
+async function fetchNews() {
+  if (newsLoading) return;
+  newsLoading = true;
+  renderNews();
+  renderTicker();
+  const collected = [];
+  for (const f of NEWS_FEEDS) {
+    try {
+      const t = await proxyFetch(f.url, "news");
+      const items = /<rss|<item|<feed|<entry/i.test(t.slice(0, 600)) ? parseFeedXML(t, f) : parseFeedJina(t, f);
+      collected.push(...items);
+    } catch (e) { /* feed unreachable for now, skip it */ }
+  }
+  collected.sort((a, b) => ((b.date && b.date.getTime()) || 0) - ((a.date && a.date.getTime()) || 0));
+  const seen = new Set(), uniq = [];
+  for (const it of collected) {
+    const k = it.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (k && !seen.has(k)) { seen.add(k); uniq.push(it); }
+  }
+  if (uniq.length) {
+    newsItems = uniq.slice(0, 60);
+    newsUpdatedAt = new Date();
+    try { localStorage.setItem(NEWS_KEY, JSON.stringify({ ts: Date.now(), items: newsItems })); } catch (e) {}
+  }
+  newsLoading = false;
+  renderNews();
+  renderTicker();
+}
+
+function newsStale() {
+  return !newsUpdatedAt || Date.now() - newsUpdatedAt.getTime() > NEWS_TTL;
+}
+
+function timeAgo(d) {
+  if (!d || isNaN(d.getTime())) return "";
+  const s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+
+// ---------------------------------------------------------------
+// News ticker: the ~20 newest headlines scroll across the top bar.
+// The track holds two identical halves and translates by -50%,
+// which makes the loop seamless. Duration is set from the measured
+// half-width so the scroll speed stays constant no matter how many
+// headlines there are. Hovering pauses it; a click opens the story.
+// ---------------------------------------------------------------
+function renderTicker() {
+  const track = document.getElementById("tickerTrack");
+  if (!track) return;
+  const items = newsItems.slice(0, 20);
+  if (!items.length) {
+    track.style.animation = "none";
+    track.innerHTML =
+      '<span class="titem" style="padding-left:14px">' +
+      (newsLoading ? "Fetching AI market news\u2026" : "No news loaded yet \u2014 open the News tab and hit Refresh news") +
+      "</span>";
+    return;
+  }
+  const html = items.map(it =>
+    '<a class="titem" href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer">' +
+    '<span class="tdot" style="background:' + esc(it.color) + '"></span>' +
+    esc(it.title) + "</a>" +
+    '<span class="tsep"></span>'
+  ).join("");
+  track.style.animation = "";
+  track.style.animationDuration = "60s";
+  track.innerHTML =
+    '<span class="thalf">' + html + "</span>" +
+    '<span class="thalf" aria-hidden="true">' + html + "</span>";
+  requestAnimationFrame(() => {
+    const half = track.firstChild ? track.firstChild.offsetWidth : 0;
+    if (half > 0) track.style.animationDuration = Math.max(25, Math.round(half / 55)) + "s";
+  });
+}
+
+function renderNews() {
+  const panel = document.getElementById("newsPanel");
+  const isNews = activeTab === "News";
+  panel.style.display = isNews ? "block" : "none";
+  document.getElementById("grid").style.display = isNews ? "none" : "";
+  if (!isNews) return;
+
+  const chips = [{ id: "all", name: "All sources" }].concat(NEWS_FEEDS);
+  document.getElementById("newsChips").innerHTML = chips.map(c =>
+    '<button class="chip' + (newsFilter === c.id ? " on" : "") + '" data-src="' + c.id + '">' + esc(c.name) + "</button>").join("");
+  document.getElementById("newsMeta").textContent = newsLoading
+    ? "Refreshing\u2026"
+    : (newsUpdatedAt ? "Updated " + timeAgo(newsUpdatedAt) : "");
+
+  const list = (newsFilter === "all" ? newsItems : newsItems.filter(i => i.sid === newsFilter)).slice(0, 40);
+  document.getElementById("newsList").innerHTML = list.length
+    ? list.map(i =>
+        '<a class="news-item" href="' + esc(i.link) + '" target="_blank" rel="noopener">' +
+        '<div class="nt">' + esc(i.title) + "</div>" +
+        (i.snippet ? '<div class="nsnip">' + esc(i.snippet) + "</div>" : "") +
+        '<div class="nrow"><span class="nsrc" style="color:' + i.color + ";background:" + i.color + '22">' +
+        esc(i.source) + "</span><span>" + esc(timeAgo(i.date)) + "</span></div></a>").join("")
+    : '<p class="news-head nmeta" style="padding:20px 4px">' +
+      (newsLoading ? "Fetching AI market news\u2026" : "No news loaded yet \u2014 hit Refresh news.") + "</p>";
+}
+
 // wiring
 document.getElementById("btnRefresh").addEventListener("click", fetchQuotes);
+// layout theme: modern <-> retro CRT, persisted like the timeframe
+document.getElementById("btnTheme").addEventListener("click", () => {
+  applyTheme(document.body.classList.contains("retro") ? "modern" : "retro", true);
+});
 // index chart hover: crosshair + tooltip (canvas is static, so attach once)
 const idxCv = document.getElementById("idxChart");
 idxCv.addEventListener("mousemove", e => {
@@ -794,7 +1111,15 @@ document.getElementById("tfbox").addEventListener("click", e => {
 });
 document.getElementById("tabs").addEventListener("click", e => {
   const t = e.target.closest("[data-tab]");
-  if (t) { activeTab = t.dataset.tab; render(); }
+  if (t) { activeTab = t.dataset.tab; render(); if (activeTab === "News" && newsStale()) fetchNews(); }
+});
+document.getElementById("btnNewsRefresh").addEventListener("click", () => {
+  newsUpdatedAt = null; // force refetch
+  fetchNews();
+});
+document.getElementById("newsChips").addEventListener("click", e => {
+  const c = e.target.closest("[data-src]");
+  if (c) { newsFilter = c.dataset.src; renderNews(); }
 });
 
 // init: restore timeframe preference + cached quotes, then fetch fresh
@@ -805,9 +1130,27 @@ document.getElementById("tabs").addEventListener("click", e => {
   if (Object.keys(quotes).length) indexData = computeIndex(quotes);
 }
 
+try {
+  const n = JSON.parse(localStorage.getItem(NEWS_KEY));
+  if (n && n.items && n.items.length) {
+    newsItems = n.items;
+    newsUpdatedAt = new Date(n.ts || Date.now());
+  }
+} catch (e) {}
+// theme first, so the very first render already uses the right palette
+let savedTheme = "modern";
+try { if (localStorage.getItem(THEME_KEY) === "retro") savedTheme = "retro"; } catch (e) {}
+applyTheme(savedTheme, false);
+
 syncTimer();
 render();
+renderTicker();
 fetchQuotes();
+if (newsStale()) fetchNews(); // ticker shows news even without opening the News tab
+// news now lives in the always-visible ticker: keep it fresh (30-min TTL)
+setInterval(() => {
+  if (newsStale() && !newsLoading) fetchNews();
+}, 60000);
 </script>
 </body>
 </html>
