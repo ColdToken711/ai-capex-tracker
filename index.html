@@ -277,6 +277,9 @@ const WATCHLIST = [
     { symbol: "LITE", name: "Lumentum" },
     { symbol: "CIEN", name: "Ciena" },
   ]},
+  { group: "AI Labs & Models", stocks: [
+    { symbol: "ANT", name: "Anthropic" },
+  ]},
   { group: "AI Software & Data", stocks: [
     { symbol: "PLTR", name: "Palantir" },
     { symbol: "SNOW", name: "Snowflake" },
@@ -294,6 +297,10 @@ const WATCHLIST = [
 const ALL = WATCHLIST.flatMap(g => g.stocks.map(s => s.symbol));
 // Market caps in millions USD, as of 2026-11-14 (Yahoo Finance)
 const MCAPS = {
+  // ANT (Anthropic): ~$1.5T fully diluted at its $83/share IPO on
+  // 19 Nov 2026 — the largest IPO on record. True this up once Yahoo
+  // publishes an official shares-outstanding figure.
+  "ANT": 1500000,
   "NVDA": 3932339,
   "AMD": 875905,
   "AVGO": 1656497,
@@ -389,7 +396,7 @@ let fetchGen = 0;    // refresh generation: stale fetches can't write
 // ---------------------------------------------------------------
 // Yahoo Finance (unofficial) via public CORS proxies, no API key.
 // Multi-symbol spark requests: 15 tickers per call, so a full
-// 58-name refresh is 4 requests. If a proxy is down or hangs, the
+// 59-name refresh is 4 requests. If a proxy is down or hangs, the
 // chain falls through to the next one and benches the dead proxy
 // for 10 minutes (allorigins had a full outage on 13 Nov 2026).
 // ---------------------------------------------------------------
@@ -707,8 +714,8 @@ async function fetchQuotes() {
   failedSymbols = [];
   const next = {};
   const failed = [];
-  // fast path: multi-symbol spark API \u2014 4 requests for all 58 names
-  // instead of 58 single-symbol requests (gentle on the free proxies)
+  // fast path: multi-symbol spark API \u2014 4 requests for all 59 names
+  // instead of 59 single-symbol requests (gentle on the free proxies)
   for (let i = 0; i < ALL.length; i += SPARK_CHUNK) {
     const chunk = ALL.slice(i, i + SPARK_CHUNK);
     try {
@@ -883,7 +890,7 @@ function render() {
     document.getElementById("idxValue").textContent = lastV.toFixed(4);
     document.getElementById("idxSub").textContent =
       tf + ": " + fmt(chg, 2) + "% (cap-weighted) vs " + fmt(eqChg, 2) + "% (equal-weight) \u00b7 " +
-      indexData.n + " stocks \u00b7 weights as of 14 Nov 2026";
+      indexData.n + " stocks \u00b7 weights as of 14 Nov 2026, ANT at 19 Nov IPO";
     drawMulti(document.getElementById("idxChart"), [
       { data: cap, color: chartC.cap, label: "cap-weighted" },
       { data: eq, color: chartC.eq, label: "equal-weighted" },

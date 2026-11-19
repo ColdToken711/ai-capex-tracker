@@ -1,6 +1,6 @@
 # AI Capex Boom Tracker
 
-A self-contained, single-file web app that tracks the **AI infrastructure capex boom** — 58 stocks across 12 segments of the AI compute supply chain, with live quotes, real 1-month trendlines, and a market-cap-weighted index comparing cap-weighted vs equal-weighted performance.
+A self-contained, single-file web app that tracks the **AI infrastructure capex boom** — 59 stocks across 13 segments of the AI compute supply chain (plus the AI labs consuming it), with live quotes, real 1-month trendlines, and a market-cap-weighted index comparing cap-weighted vs equal-weighted performance.
 
 No build step. No dependencies. No backend. No API key. One HTML file and your browser. (The only external asset is the optional pixel-font stylesheet used by the retro theme; the app works fine without it.)
 
@@ -24,6 +24,7 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 | Data Center REITs | EQIX, DLR, IRM |
 | Cooling & Thermal | MOD, JCI, TT, CARR |
 | Optical & Photonics | COHR, GLW, LITE, CIEN |
+| AI Labs & Models | ANT |
 | AI Software & Data | PLTR, SNOW, DDOG, NET, SNPS, CDNS |
 | Robotics & Industrial | SERV, ROK, SYM |
 
@@ -35,8 +36,8 @@ That's it. Quotes stream straight from Yahoo Finance through a public CORS proxy
 - **News ticker + 📰 News tab** — the 20 newest AI-market headlines scroll continuously across a bar pinned to the top of the page, with a colored dot per source. Hovering pauses the scroll, clicking a headline opens the story, and the feed refreshes itself every 30 minutes. The News tab shows the full list with per-source filter chips. Sources: TechCrunch AI, Ars Technica AI, MIT Tech Review, ZDNET AI and MarkTechPost via RSS (the parser handles both RSS and Atom formats).
 - **Retro CRT layout** — a `RETRO` toggle in the header switches the whole app into an 80s/90s green-phosphor terminal: Press Start 2P headers, VT323 body text, chunky square borders, scanlines and a soft CRT glow. The charts re-skin to the phosphor palette with thicker lines, but render at full resolution so values and tooltips stay crisp. Your choice is remembered; the pixel fonts load from Google Fonts and fall back to monospace offline.
 - **Real 1-month trendlines** — a `<canvas>` sparkline per stock drawn from actual daily closes on Yahoo Finance. No waiting for history to accumulate — you get a month of real data on first load.
-- **AI Capex Index** — a market-cap-weighted basket of all 58 names, plotted against an equal-weighted version of the same basket. The gap between the two lines shows whether the boom is concentrated in the giants or broadening to smaller names.
-- **No key, no quota** — quotes come from Yahoo's unofficial `spark` endpoint, 15 symbols per request, so a full refresh is 4 calls instead of 58.
+- **AI Capex Index** — a market-cap-weighted basket of all 59 names, plotted against an equal-weighted version of the same basket. The gap between the two lines shows whether the boom is concentrated in the giants or broadening to smaller names.
+- **No key, no quota** — quotes come from Yahoo's unofficial `spark` endpoint, 15 symbols per request, so a full refresh is 4 calls instead of 59.
 - **Resilient fetching** — requests go through a chain of CORS proxies (allorigins → codetabs → r.jina.ai); a proxy that fails goes into a 10-minute cooldown and the chain self-heals. Failed symbols get an automatic retry pass.
 - **Honest failure states** — network blocks, dead proxies, and symbols without data are each reported explicitly. No placeholder data ever shares the screen with real prices.
 
@@ -55,14 +56,14 @@ Browsers can't call Yahoo directly (it sends no CORS header), so every request i
 index_level = Σ  weightᵢ × (priceᵢ / first_closeᵢ)
 ```
 
-Both lines start at 1.0, so the level reads directly as "the basket is up X% over this window." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line; stocks that haven't reported a bar yet in the window are held at their base price rather than excluded, so the basket is complete from the first point.
+Both lines start at 1.0, so the level reads directly as "the basket is up X% over this window." Cap weights are fixed market caps baked into the file (as of 14 Nov 2026; ANT uses its ~$1.5T fully diluted IPO valuation from 19 Nov 2026, to be trued up once Yahoo publishes an official figure); the equal-weight line applies `weightᵢ = 1/n`. Stocks are forward-filled onto the union of trading dates, so US holidays don't dent the line; stocks that haven't reported a bar yet in the window are held at their base price rather than excluded, so the basket is complete from the first point.
 
 **Storage.** Per-timeframe caches (`capex_cache_v1_1M` / `_1W` / `_1D`) hold the latest quotes snapshot so switching views paints instantly and fetches fresh data in the background; `capex_tf` remembers your preferred timeframe between sessions. A generation counter guards refreshes: if you switch timeframes mid-refresh, the stale fetch discards itself instead of writing old data onto the new view.
 
 ## Project layout
 
 ```
-index.html   — the entire app (HTML + CSS + JS, ~650 lines)
+index.html   — the entire app (HTML + CSS + JS, ~1180 lines)
 README.md
 LICENSE
 ```
@@ -75,6 +76,7 @@ LICENSE
 
 ## Changelog
 
+- **Nov 2026** — Added Anthropic (ANT) in a new "AI Labs & Models" group. Anthropic listed on Nasdaq on 19 Nov 2026 in the largest IPO on record ($83/share, ~$1.5T fully diluted). All 12 pre-existing groups are the supply side of the capex boom; the labs are the demand side actually spending those billions — and with OpenAI expected to follow in 2027, the group is built to grow. ANT's cap weight uses the IPO valuation until Yahoo publishes an official shares-outstanding figure. Expect a data-less card until the opening cross prints the first trade.
 - **Nov 2026** — News ticker + News tab: 5 AI-market RSS feeds (TechCrunch, Ars Technica, MIT Tech Review, ZDNET, MarkTechPost) with a scrolling ticker pinned to the top; proxy chain now tracks dead proxies separately for quotes vs news.
 - **Nov 2026** — Retro CRT theme toggle: green-phosphor layout with Press Start 2P + VT323 fonts, charts re-skinned via CSS-variable palette at full resolution; preference persisted.
 - **Nov 2026** — Chart hover: crosshair with dates and values on the index chart, price + time on stock sparklines.
